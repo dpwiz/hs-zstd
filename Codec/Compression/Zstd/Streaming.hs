@@ -73,6 +73,10 @@ instance Show Result where
 -- | Begin a streaming compression operation.
 --
 -- The initial result will be either an 'Error' or a 'Consume'.
+--
+-- This will create and retain a (large)
+-- t'Codec.Compression.Zstd.Efficient.CCtx' outside the RTS @-M@
+-- heap until 'Error' or 'Done' is returned.
 compress :: Int
          -- ^ Compression level. Must be >= 1 and <= 'maxCLevel'.
          -> IO Result
@@ -169,6 +173,10 @@ streaming createStream freeStream outSize initStream consumeBlock finish = do
 -- | Begin a streaming decompression operation.
 --
 -- The initial result will be either an 'Error' or a 'Consume'.
+--
+-- This will create and retain a (large)
+-- t'Codec.Compression.Zstd.Efficient.DCtx' outside the RTS @-M@
+-- heap until 'Error' or 'Done' is returned.
 decompress :: IO Result
 decompress =
   streaming
@@ -186,6 +194,8 @@ decompress =
     finalizeForeignPtr cfp
     Done `fmap` shrink outSize dfp opos
 
+-- Returns a shrunk view of the buffer retaining the 'ForeignPtr',
+-- or a copy when the view could create too much slop (unused but retained memory).
 shrink :: Int -> ForeignPtr Word8 -> Int -> IO B.ByteString
 shrink capacity dfp opos
   | opos == 0  = return B.empty
