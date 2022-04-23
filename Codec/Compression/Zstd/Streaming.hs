@@ -97,7 +97,11 @@ compress level
       touchForeignPtr obfp
       if | leftover <= 0 -> do -- leftover will never be <0, but compiler does not know that
              opos1 <- fromIntegral `fmap` peekPos obuf
-             Done `fmap` shrink outSize dfp opos1
+             r <- shrink outSize dfp opos1
+             -- The Result contract requires that cfp is not referenced anymore.
+             -- We finalize the context asap, freeing significant memory
+             finalizeForeignPtr cfp
+             pure (Done r)
          | leftover > 0 -> do
              opos1 <- fromIntegral `fmap` peekPos obuf
              dfp1 <- mallocByteString (fromIntegral leftover)
@@ -176,7 +180,11 @@ decompress =
   finish
  where
   outSize = fromIntegral dstreamOutSize
-  finish _cxfp _obfp opos dfp = Done `fmap` shrink outSize dfp opos
+  finish cfp _obfp opos dfp = do
+    -- The Result contract requires that cfp is not referenced anymore,
+    -- so we finalize the context asap, freeing significant memory.
+    finalizeForeignPtr cfp
+    Done `fmap` shrink outSize dfp opos
 
 shrink :: Int -> ForeignPtr Word8 -> Int -> IO B.ByteString
 shrink capacity dfp opos
