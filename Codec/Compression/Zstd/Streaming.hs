@@ -92,7 +92,7 @@ compress level
   finish cfp obfp opos dfp = do
     let cptr = unsafeForeignPtrToPtr cfp
         obuf = unsafeForeignPtrToPtr obfp
-    check "endStream" (endStream cptr obuf) $ \leftover -> do
+    check cfp "endStream" (endStream cptr obuf) $ \leftover -> do
       touchForeignPtr cfp
       touchForeignPtr obfp
       if | leftover <= 0 -> do -- leftover will never be <0, but compiler does not know that
@@ -126,7 +126,7 @@ streaming :: IO (Ptr ctx)
 streaming createStream freeStream outSize initStream consumeBlock finish = do
   cx <- checkAlloc "createStream" createStream
   cxfp <- newForeignPtr freeStream cx
-  check "initStream" (initStream cx) $ \_ -> do
+  check cxfp "initStream" (initStream cx) $ \_ -> do
     ibfp <- newForeignPtr finalizerFree =<< malloc
     obfp <- newForeignPtr finalizerFree =<< malloc
     dfp <- newOutput obfp
@@ -157,7 +157,7 @@ streaming createStream freeStream outSize initStream consumeBlock finish = do
        | otherwise -> do
            let obuf = unsafeForeignPtrToPtr obfp
                ibuf = unsafeForeignPtrToPtr ibfp
-           check "consumeBlock"
+           check cxfp "consumeBlock"
              (withForeignPtr cxfp $ \cptr ->
                consumeBlock cptr obuf ibuf <* touchForeignPtr fp) $ \_ -> do
              opos1 <- fromIntegral `fmap` peekPos obuf
@@ -197,9 +197,13 @@ shrink capacity dfp opos
 buffer :: Ptr a -> CSize -> Buffer io
 buffer ptr size = Buffer ptr size 0
 
-check :: String -> IO CSize -> (CSize -> IO Result) -> IO Result
-check name act onSuccess = do
+check :: ForeignPtr ctx -> String -> IO CSize -> (CSize -> IO Result) -> IO Result
+check cfp name act onSuccess = do
   ret <- act
   if isError ret
-    then return (Error name (getErrorName ret))
+    then do
+      -- The Result contract requires that cfp is not referenced anymore,
+      -- so we finalize the context asap, freeing significant memory.
+      finalizeForeignPtr cfp
+      return (Error name (getErrorName ret))
     else onSuccess ret
