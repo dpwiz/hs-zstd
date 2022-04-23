@@ -8,6 +8,9 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
+-- We're better off without type signatures on properties
+{-# OPTIONS_GHC -Wno-missing-signatures #-}
+
 module Properties
     (
       tests
