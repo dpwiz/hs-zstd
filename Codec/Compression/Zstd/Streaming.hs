@@ -33,7 +33,7 @@ import qualified Data.ByteString as B
 import Data.ByteString.Internal (ByteString(..), mallocByteString)
 import Foreign.Marshal.Alloc (finalizerFree, malloc)
 import Foreign.C.Types (CSize)
-import Foreign.ForeignPtr
+import Foreign.ForeignPtr (ForeignPtr, FinalizerPtr, finalizeForeignPtr, touchForeignPtr, withForeignPtr, newForeignPtr)
 import Foreign.ForeignPtr.Unsafe (unsafeForeignPtrToPtr)
 import Foreign.Storable (poke)
 import Foreign.Ptr (Ptr, plusPtr)
@@ -93,7 +93,7 @@ compress level
   finish
  where
   outSize = fromIntegral cstreamOutSize
-  finish cfp obfp opos dfp = do
+  finish cfp obfp _ dfp = do
     let cptr = unsafeForeignPtrToPtr cfp
         obuf = unsafeForeignPtrToPtr obfp
     check cfp "endStream" (endStream cptr obuf) $ \leftover -> do
